@@ -1,5 +1,5 @@
 /* GM board service worker. Same-origin only. Cache name is the version. */
-const CACHE = 'gm-board-v1';
+const CACHE = 'gm-board-v2';
 const SHELL = [
   './',
   './index.html',
