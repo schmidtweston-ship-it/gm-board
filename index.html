@@ -3,24 +3,25 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#0b0b0a">
+  <meta name="theme-color" content="#0d0e0c">
   <meta name="color-scheme" content="dark">
   <meta name="robots" content="noindex, nofollow">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="description" content="GM. Five minutes. Hurt arrivals, rooms that will miss, comps. Sample day — not a live feed.">
   <title>GM</title>
+  <!-- gm-board-v2 -->
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="icon" href="./favicon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="./icon-192.png">
   <style>
     :root {
-      --bg: #0b0b0a;
+      --bg: #0d0e0c;
       --fg: #f4f0e6;
       --mute: #9a9588;
-      --line: #2a2926;
-      --chip: #171614;
-      --amber: #e8b040;
+      --line: #2c2b27;
+      --chip: #181916;
+      --amber: #e2a636;
       --hurt: #d4785a;
       --miss: #c4a35a;
       --comp: #7ea37a;
@@ -169,16 +170,51 @@
     #comp-h { color: var(--comp); border-bottom-color: var(--comp); }
 
     .row {
-      display: block;
+      display: flex;
+      align-items: stretch;
+      gap: 0.45rem;
       width: 100%;
+      border-bottom: 1px solid var(--line);
+      padding: 0.55rem 0;
+    }
+    .check-hit {
+      flex: 1;
+      display: flex;
+      align-items: flex-start;
+      gap: 0.7rem;
+      width: auto;
+      min-width: 0;
       text-align: left;
       background: transparent;
       border: 0;
-      border-bottom: 1px solid var(--line);
       border-radius: 0;
-      padding: 0.85rem 0;
-      min-height: 0;
+      padding: 0.3rem 0;
+      min-height: 3.2rem;
     }
+    .box {
+      flex: 0 0 2.75rem;
+      width: 2.75rem;
+      height: 2.75rem;
+      margin-top: 0.12rem;
+      border: 2px solid var(--mute);
+      border-radius: 0.4rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.7rem;
+      font-weight: 800;
+      line-height: 1;
+      color: transparent;
+      background: transparent;
+    }
+    .row.checked .box {
+      background: var(--amber);
+      border-color: var(--amber);
+      color: var(--bg);
+    }
+    .row.checked .room { color: var(--amber); }
+    .row.checked .why { color: #b8b3a6; }
+    .copy { min-width: 0; flex: 1; }
     .row .room {
       font-size: clamp(1.65rem, 7.4vw, 2.15rem);
       font-weight: 800;
@@ -198,6 +234,21 @@
       font-weight: 700;
       color: var(--mute);
       letter-spacing: 0.01em;
+    }
+    .edit {
+      align-self: center;
+      flex: 0 0 auto;
+      min-width: 2.7rem;
+      min-height: 2.7rem;
+      padding: 0.4rem 0.55rem;
+      background: var(--chip);
+      border: 1px solid var(--line);
+      border-radius: 0.4rem;
+      font-size: 0.72rem;
+      font-weight: 800;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--mute);
     }
     .tag {
       display: inline-block;
@@ -258,7 +309,7 @@
     .panel {
       width: 100%;
       max-width: 28rem;
-      background: #141312;
+      background: #161512;
       border-top: 1px solid var(--line);
       padding: 1rem var(--pad) max(1.2rem, env(safe-area-inset-bottom));
     }
@@ -282,7 +333,7 @@
     }
     .field input, .field textarea {
       width: 100%;
-      background: #0b0b0a;
+      background: var(--bg);
       border: 1px solid var(--line);
       border-radius: 0.35rem;
       padding: 0.65rem 0.7rem;
@@ -362,7 +413,7 @@
       <button type="button" id="clear-mine">Clear for my property</button>
     </div>
     <label class="toggle"><input type="checkbox" id="show-cleared"> Show cleared</label>
-    <p class="foot">SAMPLE guests are invented. Dismiss hides a line; it is not gone. Nothing here is a reservation system.</p>
+    <p class="foot">SAMPLE guests are invented. Tap a room to check it off for the morning. Edit still edits. Dismiss hides a line; it is not gone. Nothing here is a reservation system.</p>
   </footer>
 
   <div id="sheet" hidden>
@@ -440,6 +491,14 @@
 
     function clone(x) { return JSON.parse(JSON.stringify(x)); }
 
+    function normalizeList(arr) {
+      if (!Array.isArray(arr)) return [];
+      return arr.map((it) => {
+        if (!it || typeof it !== 'object') return it;
+        return Object.assign({}, it, { cleared: !!it.cleared, checked: !!it.checked });
+      });
+    }
+
     function load() {
       try {
         const raw = localStorage.getItem(KEY);
@@ -453,9 +512,9 @@
           arrivals: parsed.arrivals != null ? String(parsed.arrivals) : '',
           departures: parsed.departures != null ? String(parsed.departures) : '',
           showCleared: !!parsed.showCleared,
-          hurt: Array.isArray(parsed.hurt) ? parsed.hurt : [],
-          miss: Array.isArray(parsed.miss) ? parsed.miss : [],
-          comp: Array.isArray(parsed.comp) ? parsed.comp : []
+          hurt: normalizeList(parsed.hurt),
+          miss: normalizeList(parsed.miss),
+          comp: normalizeList(parsed.comp)
         };
       } catch (e) {
         return clone(SAMPLE);
@@ -495,21 +554,30 @@
       }
       host.innerHTML = items.map((it) => {
         const tag = it.sample ? '<span class="tag">SAMPLE</span>' : '';
-        const cls = 'row' + (it.cleared ? ' cleared' : '');
+        const cls = 'row' + (it.cleared ? ' cleared' : '') + (it.checked ? ' checked' : '');
+        const label = kind === 'comp'
+          ? ([it.who, it.room].filter(Boolean).join(' · ') || 'Comp')
+          : (it.room || '—');
+        const checkLabel = (it.checked ? 'Uncheck ' : 'Check off ') + label;
+        const pressed = it.checked ? 'true' : 'false';
+        const mark = it.checked ? '✓' : '';
+        let body;
         if (kind === 'comp') {
-          const head = [it.who, it.room].filter(Boolean).join(' · ') || 'Comp';
           const why = [it.what, it.why].filter(Boolean).join(' — ');
           const yes = it.approvedBy ? 'Yes: ' + it.approvedBy : '';
-          return '<button type="button" class="' + cls + '" data-kind="' + kind + '" data-id="' + escapeHtml(it.id) + '">' +
-            '<div class="room">' + escapeHtml(head) + tag + '</div>' +
+          body = '<div class="room">' + escapeHtml(label) + tag + '</div>' +
             (why ? '<div class="why">' + escapeHtml(why) + '</div>' : '') +
-            (yes ? '<div class="meta">' + escapeHtml(yes) + '</div>' : '') +
-            '</button>';
+            (yes ? '<div class="meta">' + escapeHtml(yes) + '</div>' : '');
+        } else {
+          body = '<div class="room">' + escapeHtml(label) + tag + '</div>' +
+            (it.why ? '<div class="why">' + escapeHtml(it.why) + '</div>' : '');
         }
-        return '<button type="button" class="' + cls + '" data-kind="' + kind + '" data-id="' + escapeHtml(it.id) + '">' +
-          '<div class="room">' + escapeHtml(it.room || '—') + tag + '</div>' +
-          (it.why ? '<div class="why">' + escapeHtml(it.why) + '</div>' : '') +
-          '</button>';
+        return '<div class="' + cls + '" data-kind="' + kind + '" data-id="' + escapeHtml(it.id) + '">' +
+          '<button type="button" class="check-hit" aria-pressed="' + pressed + '" aria-label="' + escapeHtml(checkLabel) + '">' +
+          '<span class="box" aria-hidden="true">' + mark + '</span>' +
+          '<span class="copy">' + body + '</span></button>' +
+          '<button type="button" class="edit" data-kind="' + kind + '" data-id="' + escapeHtml(it.id) + '" aria-label="Edit ' + escapeHtml(label) + '">Edit</button>' +
+          '</div>';
       }).join('');
     }
 
@@ -580,7 +648,7 @@
       const vals = readForm();
       const { kind, id, isNew } = editing;
       if (isNew) {
-        const item = { id: uid(kind[0]), sample: false, cleared: false, ...vals };
+        const item = { id: uid(kind[0]), sample: false, cleared: false, checked: false, ...vals };
         state[kind].push(item);
       } else {
         const item = findItem(kind, id);
@@ -611,11 +679,23 @@
         openSheet(add.getAttribute('data-add'), null);
         return;
       }
-      const row = e.target.closest('.row');
-      if (row) {
+      const edit = e.target.closest('.edit');
+      if (edit) {
+        const kind = edit.getAttribute('data-kind');
+        const item = findItem(kind, edit.getAttribute('data-id'));
+        if (item) openSheet(kind, item);
+        return;
+      }
+      const hit = e.target.closest('.check-hit');
+      if (hit) {
+        const row = hit.closest('.row');
+        if (!row) return;
         const kind = row.getAttribute('data-kind');
         const item = findItem(kind, row.getAttribute('data-id'));
-        if (item) openSheet(kind, item);
+        if (!item) return;
+        item.checked = !item.checked;
+        save();
+        render();
       }
     });
 
